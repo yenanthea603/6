@@ -3,166 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>超市語文跑酷 2.0</title>
+    <title>超市語文跑酷 3.0</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #333; font-family: sans-serif; }
-        #game { position: relative; width: 100%; height: 100%; max-width: 500px; margin: 0 auto; background: #a1c4fd; overflow: hidden; }
+        :root { --main: #2ecc71; --fail: #e74c3c; }
+        * { box-sizing: border-box; touch-action: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #222; font-family: sans-serif; }
         
-        /* 頂部 UI */
-        #ui { position: absolute; top: 0; left: 0; width: 100%; z-index: 100; text-align: center; padding: 20px 0; pointer-events: none; }
-        #target-display { 
-            display: inline-block; background: white; padding: 10px 30px; border: 4px solid #2ecc71; 
-            border-radius: 20px; pointer-events: auto; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        /* 玩家 */
-        #player { 
-            position: absolute; bottom: 50px; width: 80px; height: 80px; 
-            font-size: 50px; display: flex; align-items: center; justify-content: center;
-            z-index: 50; transition: left 0.1s ease-out;
+        #game-stage { 
+            position: relative; width: 100%; height: 100%; max-width: 500px; margin: 0 auto; 
+            background: #f1f2f6; overflow: hidden; border-left: 2px solid #333; border-right: 2px solid #333;
         }
 
-        /* 單字 */
-        .item { 
-            position: absolute; width: 100px; height: 100px; background: white; 
-            border-radius: 15px; border: 2px solid #333; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; font-weight: bold; font-size: 20px; z-index: 10;
+        /* 超市背景與地板 */
+        #aisle-bg {
+            position: absolute; inset: 0;
+            background: linear-gradient(#ccc 2px, transparent 2px);
+            background-size: 100% 100px;
+            animation: moveFloor 1.5s linear infinite;
+            z-index: 1; opacity: 0.5;
+        }
+        @keyframes moveFloor { from { transform: translateY(-100px); } to { transform: translateY(0); } }
+
+        /* 目標 UI */
+        #ui-header {
+            position: absolute; top: 20px; left: 0; width: 100%; z-index: 100;
+            display: flex; flex-direction: column; align-items: center; pointer-events: none;
+        }
+        #target-card {
+            background: white; border: 5px solid var(--main); border-radius: 25px; padding: 15px 40px;
+            text-align: center; pointer-events: auto; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        #target-card:active { transform: scale(0.95); }
+
+        /* 購物車 */
+        #player {
+            position: absolute; bottom: 80px; width: 100px; height: 100px;
+            font-size: 60px; display: flex; align-items: center; justify-content: center;
+            z-index: 50; transition: left 0.12s cubic-bezier(0.1, 0.5, 0.5, 1);
+            filter: drop-shadow(0 8px 10px rgba(0,0,0,0.3));
         }
 
-        /* 啟動遮罩 */
-        #mask { 
-            position: absolute; inset: 0; background: #2ecc71; z-index: 1000; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;
+        /* 圖片物品 (只有圖片) */
+        .item {
+            position: absolute; width: 110px; height: 110px;
+            background: white; border-radius: 50%; border: 4px solid #eee;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 50px; z-index: 10; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
-        .btn { padding: 15px 40px; font-size: 24px; background: white; color: #2ecc71; border: none; border-radius: 50px; cursor: pointer; font-weight: bold; }
-    </style>
-</head>
-<body>
 
-<div id="game">
-    <div id="ui">
-        <div id="target-display" onclick="speak()">
-            <div style="font-size:12px; color:#666;">目標 (點我聽聲音)</div>
-            <div id="word" style="font-size:30px;">載入中</div>
-        </div>
-        <div id="score" style="font-size:20px; margin-top:10px; color:#2c3e50;">分數: 0</div>
-    </div>
-
-    <div id="player">🛒</div>
-
-    <div id="mask">
-        <h1>準備好了嗎？</h1>
-        <p>收集正確的單字商品</p>
-        <button class="btn" onclick="init()">點擊開始遊戲</button>
-        <p style="margin-top:20px;">鍵盤 ← → 或 點擊左右移動</p>
-    </div>
-</div>
-
-<script>
-    const DATA = [
-        {n:"牛奶", s:"🥛"}, {n:"雞腿", s:"🍗"}, {n:"衛生紙", s:"🧻"},
-        {n:"麵包", s:"🍞"}, {n:"雞蛋", s:"🥚"}, {n:"蘋果", s:"🍎"},
-        {n:"打折", s:"🏷️"}, {n:"收銀台", s:"🏧"}
-    ];
-
-    let active = false;
-    let lane = 1;
-    let score = 0;
-    let speed = 4;
-    let target = null;
-    const player = document.getElementById('player');
-    const gameDiv = document.getElementById('game');
-
-    function init() {
-        document.getElementById('mask').style.display = 'none';
-        active = true;
-        score = 0;
-        speed = 4;
-        lane = 1;
-        updatePlayer();
-        setNext();
-        spawnLoop();
-    }
-
-    function setNext() {
-        target = DATA[Math.floor(Math.random() * DATA.length)];
-        document.getElementById('word').innerText = target.n;
-    }
-
-    function updatePlayer() {
-        const w = gameDiv.offsetWidth;
-        player.style.left = (lane * (w/3) + (w/3 - 80)/2) + "px";
-    }
-
-    function spawnLoop() {
-        if(!active) return;
-        
-        const w = gameDiv.offsetWidth;
-        const correct = Math.floor(Math.random() * 3);
-
-        for(let i=0; i<3; i++) {
-            const itemData = (i === correct) ? target : DATA[Math.floor(Math.random() * DATA.length)];
-            const el = document.createElement('div');
-            el.className = 'item';
-            el.innerHTML = `<span style="font-size:30px">${itemData.s}</span>${itemData.n}`;
-            el.style.left = (i * (w/3) + (w/3 - 100)/2) + "px";
-            el.style.top = "-120px";
-            gameDiv.appendChild(el);
-
-            let top = -120;
-            const move = setInterval(() => {
-                if(!active) { clearInterval(move); el.remove(); return; }
-                top += speed;
-                el.style.top = top + "px";
-
-                // 碰撞檢測
-                if(top > gameDiv.offsetHeight - 140 && top < gameDiv.offsetHeight - 40 && i === lane) {
-                    if(itemData.n === target.n) {
-                        score += 10;
-                        document.getElementById('score').innerText = "分數: " + score;
-                        speed += 0.1;
-                        setNext();
-                        clearInterval(move);
-                        el.remove();
-                    } else {
-                        end();
-                    }
-                }
-                if(top > gameDiv.offsetHeight) { clearInterval(move); el.remove(); }
-            }, 16);
-        }
-        setTimeout(spawnLoop, 3000 - (speed * 100));
-    }
-
-    function end() {
-        active = false;
-        alert("撞錯啦！得分: " + score);
-        location.reload();
-    }
-
-    function speak() {
-        if(!target) return;
-        const m = new SpeechSynthesisUtterance(target.n);
-        m.lang = 'zh-TW';
-        window.speechSynthesis.speak(m);
-    }
-
-    // 控制：鍵盤 + 點擊
-    window.addEventListener('keydown', (e) => {
-        if(!active) return;
-        if(e.key === "ArrowLeft" && lane > 0) lane--;
-        if(e.key === "ArrowRight" && lane < 2) lane++;
-        updatePlayer();
-    });
-
-    gameDiv.addEventListener('mousedown', (e) => {
-        if(!active) return;
-        if(e.clientX < window.innerWidth/2) { if(lane > 0) lane--; }
-        else { if(lane < 2) lane++; }
-        updatePlayer();
-    });
-
-    window.addEventListener('resize', updatePlayer);
-</script>
-</body>
-</html>
+        /* 特效層 */
+        #fx-layer { position: absolute
