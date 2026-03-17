@@ -3,158 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>超市跑酷 - 終極相容版</title>
+    <title>超市語文跑酷 2.0</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #eee; font-family: sans-serif; }
-        #game-stage { position: relative; width: 100%; height: 100%; max-width: 500px; margin: 0 auto; background: #fff; overflow: hidden; border: 2px solid #333; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #333; font-family: sans-serif; }
+        #game { position: relative; width: 100%; height: 100%; max-width: 500px; margin: 0 auto; background: #a1c4fd; overflow: hidden; }
         
-        /* 跑道線條 */
-        .lane-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #ddd; z-index: 1; }
+        /* 頂部 UI */
+        #ui { position: absolute; top: 0; left: 0; width: 100%; z-index: 100; text-align: center; padding: 20px 0; pointer-events: none; }
+        #target-display { 
+            display: inline-block; background: white; padding: 10px 30px; border: 4px solid #2ecc71; 
+            border-radius: 20px; pointer-events: auto; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
         
-        /* 目標 UI */
-        #target-card { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: white; padding: 10px 30px; border-radius: 50px; z-index: 100; text-align: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        
-        /* 玩家 (購物車) */
-        #player { position: absolute; bottom: 100px; width: 80px; height: 80px; background: #2c3e50; border-radius: 10px; z-index: 50; transition: left 0.1s ease; display: flex; align-items: center; justify-content: center; font-size: 40px; color: white; }
-        
-        /* 單字塊 */
-        .word-box { position: absolute; width: 100px; height: 100px; background: white; border: 3px solid #333; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; z-index: 10; box-shadow: 0 4px 5px rgba(0,0,0,0.1); }
-        
-        /* 覆蓋層 */
-        #mask { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; }
-        .start-btn { padding: 20px 40px; font-size: 24px; background: #2ecc71; color: white; border: none; border-radius: 50px; cursor: pointer; }
+        /* 玩家 */
+        #player { 
+            position: absolute; bottom: 50px; width: 80px; height: 80px; 
+            font-size: 50px; display: flex; align-items: center; justify-content: center;
+            z-index: 50; transition: left 0.1s ease-out;
+        }
+
+        /* 單字 */
+        .item { 
+            position: absolute; width: 100px; height: 100px; background: white; 
+            border-radius: 15px; border: 2px solid #333; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; font-weight: bold; font-size: 20px; z-index: 10;
+        }
+
+        /* 啟動遮罩 */
+        #mask { 
+            position: absolute; inset: 0; background: #2ecc71; z-index: 1000; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;
+        }
+        .btn { padding: 15px 40px; font-size: 24px; background: white; color: #2ecc71; border: none; border-radius: 50px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="game-stage">
-    <div id="target-card" onclick="speak()">
-        <div id="target-word" style="font-size:24px;">載入中</div>
-        <small>🔊 點擊發音 & 暫停</small>
+<div id="game">
+    <div id="ui">
+        <div id="target-display" onclick="speak()">
+            <div style="font-size:12px; color:#666;">目標 (點我聽聲音)</div>
+            <div id="word" style="font-size:30px;">載入中</div>
+        </div>
+        <div id="score" style="font-size:20px; margin-top:10px; color:#2c3e50;">分數: 0</div>
     </div>
 
-    <div class="lane-line" style="left: 33.3%;"></div>
-    <div class="lane-line" style="left: 66.6%;"></div>
-    
     <div id="player">🛒</div>
 
     <div id="mask">
-        <button class="start-btn" onclick="startGame()">點擊開始遊戲</button>
+        <h1>準備好了嗎？</h1>
+        <p>收集正確的單字商品</p>
+        <button class="btn" onclick="init()">點擊開始遊戲</button>
+        <p style="margin-top:20px;">鍵盤 ← → 或 點擊左右移動</p>
     </div>
 </div>
 
 <script>
-    const ITEMS = [
+    const DATA = [
         {n:"牛奶", s:"🥛"}, {n:"雞腿", s:"🍗"}, {n:"衛生紙", s:"🧻"},
         {n:"麵包", s:"🍞"}, {n:"雞蛋", s:"🥚"}, {n:"蘋果", s:"🍎"},
-        {n:"打折", s:"🏷️"}, {n:"收銀台", s:"💰"}, {n:"推車", s:"🛒"}
+        {n:"打折", s:"🏷️"}, {n:"收銀台", s:"🏧"}
     ];
 
-    let gameActive = false;
-    let currentTarget = null;
-    let lane = 1; // 0, 1, 2
-    let speed = 4;
+    let active = false;
+    let lane = 1;
     let score = 0;
-    const stage = document.getElementById('game-stage');
+    let speed = 4;
+    let target = null;
     const player = document.getElementById('player');
-    const targetUI = document.getElementById('target-word');
+    const gameDiv = document.getElementById('game');
 
-    function startGame() {
+    function init() {
         document.getElementById('mask').style.display = 'none';
-        gameActive = true;
+        active = true;
         score = 0;
         speed = 4;
         lane = 1;
-        updatePlayerPos();
-        nextTarget();
-        gameLoop();
+        updatePlayer();
+        setNext();
+        spawnLoop();
     }
 
-    function nextTarget() {
-        currentTarget = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-        targetUI.innerText = currentTarget.n;
+    function setNext() {
+        target = DATA[Math.floor(Math.random() * DATA.length)];
+        document.getElementById('word').innerText = target.n;
     }
 
-    function updatePlayerPos() {
-        const stageWidth = stage.offsetWidth;
-        const laneWidth = stageWidth / 3;
-        player.style.left = (lane * laneWidth + (laneWidth - 80) / 2) + "px";
+    function updatePlayer() {
+        const w = gameDiv.offsetWidth;
+        player.style.left = (lane * (w/3) + (w/3 - 80)/2) + "px";
     }
 
-    function spawnRow() {
-        if (!gameActive) return;
-        const stageWidth = stage.offsetWidth;
-        const laneWidth = stageWidth / 3;
+    function spawnLoop() {
+        if(!active) return;
+        
+        const w = gameDiv.offsetWidth;
         const correct = Math.floor(Math.random() * 3);
 
-        for (let i = 0; i < 3; i++) {
-            const data = (i === correct) ? currentTarget : ITEMS[Math.floor(Math.random() * ITEMS.length)];
-            const div = document.createElement('div');
-            div.className = 'word-box';
-            div.innerHTML = `<span>${data.s}</span><span>${data.n}</span>`;
-            div.style.left = (i * laneWidth + (laneWidth - 100) / 2) + "px";
-            div.style.top = "-120px";
-            stage.appendChild(div);
+        for(let i=0; i<3; i++) {
+            const itemData = (i === correct) ? target : DATA[Math.floor(Math.random() * DATA.length)];
+            const el = document.createElement('div');
+            el.className = 'item';
+            el.innerHTML = `<span style="font-size:30px">${itemData.s}</span>${itemData.n}`;
+            el.style.left = (i * (w/3) + (w/3 - 100)/2) + "px";
+            el.style.top = "-120px";
+            gameDiv.appendChild(el);
 
-            // 讓它掉下來
-            let topPos = -120;
-            const moveInterval = setInterval(() => {
-                if (!gameActive) { clearInterval(moveInterval); div.remove(); return; }
-                
-                topPos += speed;
-                div.style.top = topPos + "px";
+            let top = -120;
+            const move = setInterval(() => {
+                if(!active) { clearInterval(move); el.remove(); return; }
+                top += speed;
+                el.style.top = top + "px";
 
                 // 碰撞檢測
-                if (topPos > stage.offsetHeight - 180 && topPos < stage.offsetHeight - 80 && i === lane) {
-                    if (data.n === currentTarget.n) {
+                if(top > gameDiv.offsetHeight - 140 && top < gameDiv.offsetHeight - 40 && i === lane) {
+                    if(itemData.n === target.n) {
                         score += 10;
-                        nextTarget();
-                        speed += 0.2;
-                        clearInterval(moveInterval);
-                        div.remove();
+                        document.getElementById('score').innerText = "分數: " + score;
+                        speed += 0.1;
+                        setNext();
+                        clearInterval(move);
+                        el.remove();
                     } else {
-                        gameOver();
+                        end();
                     }
                 }
-
-                if (topPos > stage.offsetHeight) {
-                    clearInterval(moveInterval);
-                    div.remove();
-                }
-            }, 20);
+                if(top > gameDiv.offsetHeight) { clearInterval(move); el.remove(); }
+            }, 16);
         }
+        setTimeout(spawnLoop, 3000 - (speed * 100));
     }
 
-    function gameLoop() {
-        if (!gameActive) return;
-        spawnRow();
-        setTimeout(gameLoop, 2500 - (speed * 100));
-    }
-
-    function gameOver() {
-        gameActive = false;
-        alert("撞錯囉！得分：" + score);
+    function end() {
+        active = false;
+        alert("撞錯啦！得分: " + score);
         location.reload();
     }
 
     function speak() {
-        const m = new SpeechSynthesisUtterance(currentTarget.n);
+        if(!target) return;
+        const m = new SpeechSynthesisUtterance(target.n);
         m.lang = 'zh-TW';
         window.speechSynthesis.speak(m);
     }
 
-    // 點擊換賽道
-    stage.addEventListener('mousedown', (e) => {
-        if (!gameActive) return;
-        if (e.clientX < window.innerWidth / 2) {
-            if (lane > 0) lane--;
-        } else {
-            if (lane < 2) lane++;
-        }
-        updatePlayerPos();
+    // 控制：鍵盤 + 點擊
+    window.addEventListener('keydown', (e) => {
+        if(!active) return;
+        if(e.key === "ArrowLeft" && lane > 0) lane--;
+        if(e.key === "ArrowRight" && lane < 2) lane++;
+        updatePlayer();
     });
 
-    window.addEventListener('resize', updatePlayerPos);
+    gameDiv.addEventListener('mousedown', (e) => {
+        if(!active) return;
+        if(e.clientX < window.innerWidth/2) { if(lane > 0) lane--; }
+        else { if(lane < 2) lane++; }
+        updatePlayer();
+    });
+
+    window.addEventListener('resize', updatePlayer);
 </script>
 </body>
 </html>
